@@ -20,5 +20,3 @@ let g = createGraph liste Graph.(empty);;
 
 let test1 = ((Graph.find ("n2","n4") g) == 3);;
 let test2 = ((Graph.find ("n1","n2") g) == 1);;
-
-let shortestPathDjikstra
