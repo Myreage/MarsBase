@@ -5,6 +5,7 @@ module type OrderedType = sig
     val compare : t -> t -> int
   end
 
+
   (* Signature des graphes *)
   module type MyGraph = sig
     type node
@@ -26,9 +27,8 @@ module type OrderedType = sig
 
 		val distance : node -> node -> graph -> int
 		val bindings : graph -> (NodeMap.key * NodeSet.t) list
-		val voisins : node -> node list -> node list
+		val voisins : node -> (NodeMap.key * NodeSet.t) list -> (NodeMap.key * NodeSet.t) list
 		val is_node_in_set : node -> NodeSet.t -> bool
-
   end
 
 (* Foncteur pour faire des graphes *)
@@ -83,24 +83,24 @@ module Make (X : OrderedType) : (MyGraph with type node = X.t) = struct
 				|a::b -> let (h,j) = a in if h=x then j else aux b x
 				in
 			let x = NodeMap.find a g in
-				let elts = NodeSet.elements x in
-					aux elts b
+				let elt = NodeSet.elements x in
+					aux elt b
 
-			let rec is_node_in_set n set = match set with
-				|[] -> 0
-				|(x,y)::t -> if x=n then 1 else is_node_in_set n t;;
+			let is_node_in_set n set =
+				NodeSet.exists (fun x -> let (a,b) = x in
+				if (a=n) then true else false) set
+
 
 			let rec voisins a nodes_list = match nodes_list with
 				|[]-> []
-				|(x,y)::t -> if is_node_in_set a y then (x,y)::(voisins a t);;
+				|(x,y)::t -> 	if (is_node_in_set a y) then (x,y)::(voisins a t)
+											else voisins a t;;
 end
 
-module Int : (OrderedType with type t = int) = struct
-    type t = int
-    let compare = compare
-end
 
 module MyStringGraph = Make(String);; (* Graphe dont les noeuds sont des String, avec arcs valués et sans direction *)
+module DijkstraMap = Map.Make(String);;
+
 
 let (liste, (init,last)) = Analyse.analyse_file_1 "1.txt";;
 
@@ -111,64 +111,56 @@ let rec createGraph l g = match l with
 						createGraph b g2;;
 
 let g = createGraph liste MyStringGraph.empty;;
-print_string "Nodes : "; print_string (MyStringGraph.fold_node (fun n acc -> (n^" - "^acc)) g "");;
-print_string "Edges : \n"; print_string (MyStringGraph.fold_edge (fun a (d1,d2) acc_a -> (acc_a^a^" - "^d1^" #"^(string_of_int d2)^"\n")) g "");;
+
+let rec init_dijkstramap map nodes start = match nodes with
+		|[] -> map
+		|(x,y)::t -> 	if x=start then init_dijkstramap (DijkstraMap.add x (0,false,"") map) t start
+									else init_dijkstramap (DijkstraMap.add x (-1,false,"") map) t start;;
+
+let find_min dijkstramap = (* renvoie (min_key,distance) *)
+	DijkstraMap.fold (fun k v acc ->	let (w,_,_) = v in
+											let (x,w') = acc in
+											if w<w' then (k,w) else acc)
+	dijkstramap ("",999999);;
+
+let find_min_unseen dijkstramap =
+	DijkstraMap.fold (fun k v acc ->	let (w,z,t) = v in
+											let (x,w',_,_) = acc in
+											if ((w<w') && (not z) && (w!=(-1))) then (k,w,z,t) else acc)
+	dijkstramap ("",9999999,false,"");;
 
 
-(* DJIKSTRA*)
-print_string (string_of_int (MyStringGraph.distance "n2" "n4" g));;
+let rec update dijkstramap voisins node_curr g = (* voisins = [(a,[..]),..] *)
+let (a,b,_,d) = node_curr in
+match voisins with
+	|[] -> dijkstramap
+	|(x,l)::t -> 	let dist = MyStringGraph.distance x a g in
+								let (dist_fils,c,_) = DijkstraMap.find x dijkstramap in
+								if ((((b + dist) < dist_fils) || (dist_fils = -1)) && (not c))
+								then
+								update (DijkstraMap.add x (b + dist, c,a) dijkstramap) t node_curr g
+								else
+								update dijkstramap t node_curr g;;
 
-let rec init_distances nodes start = match nodes with
-		|[] -> []
-		|(x,y)::t -> 	if x=start then 0::(init_distances t start)
-									else 999999::(init_distances t start);;
+let rec dijkstra_aux dijkstramap node_curr nodes g e =
+	let (a,b,_,d) = node_curr in
+	let dijkstramap = DijkstraMap.add a (b,true,d) dijkstramap in
+	let voisins = MyStringGraph.voisins a nodes in
+	let dijkstramap = update dijkstramap voisins node_curr g in
+	let (min,_) = find_min dijkstramap in
+	if (min=e) then dijkstramap
+	else dijkstra_aux dijkstramap (find_min_unseen dijkstramap) nodes g e;;
 
-let rec find_index_distances x nodes i = match nodes with
-	| [] -> 0
-	| (a,b)::t -> if x = b then i else find_index_distances x t i+1;;
+let rec path dijkstramap s e =
+	if (e=s) then []
+	else let (_,_,d) = 	DijkstraMap.find e dijkstramap
+	 										in d::(path dijkstramap s d);;
 
-let rec find_min nodes_dijkstra nodes distances mini sommet i = match nodes with
-	|[] -> sommet
-	|(x,y)::t -> if ((distances.[i] < mini) && not(List.mem (x,y) nodes_dijkstra))
-	 						 then (find_min nodes_dijkstra t distances distances.[i] x i+1)
-							 else (find_min nodes_dijkstra t distances mini sommet i+1);;
+let dijkstra g start e =
+	let nodes = MyStringGraph.bindings g in (* nodes est de la forme [("ni",[("nj",3),("nk", 6),...]),...]  *)
+	let dijkstramap = init_dijkstramap DijkstraMap.empty nodes start in (* distances est de la forme [(x,w,z),...] avec x noeud, w poids et z indicateur de visite *)
+	let dijkstramap = dijkstra_aux dijkstramap (start,0,false,"") nodes g start in
+	path dijkstramap start e;;
 
-let update_distances a b (distances : int list) nodes g predecereurs =
-	let ia = find_index_distances a nodes 0 in
-	let ib = find_index_distances b nodes 0 in
-	let poidsab = MyStringGraph.distance a b g in
-	let pred = predecereurs in
-	let new_dist = distances in
-	if (List.nth distances ib) > ((List.nth distances ia) + poidsab) then
-	new_dist.[ib] = distances.[ia] + poidsab;
-	pred.[ib] = pred.[ia];
-	(new_dist,pred);;
-
-let b = MyStringGraph.bindings g;;
-let distances = init_distances (MyStringGraph.bindings g) "n1";;
-
-let diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
-
-let dijkstra g start =
-
-	let rec aux nodes distances = match nodes with (*P résultat*)
-	|[] -> distances
-	|(x,y)::t ->	let Q = List.filter (fun x -> x=)
-	 							let min = find_min Q nodes distances 99999 "" 0
-		in
-
-		let rec aux2 voisins = match voisins with
-		|[] -> distances
-		|(a,b)::t -> aux2 t update_distances min (a,b) distances nodes g predecereurs
-		in
-		let distances2 = aux2 MyStringGraph.voisins min nodes (* renvoie les nouvelles distances*)
-		in
-
-		aux
-
-
-
-	let predecereurs = [] in
-	let nodes = MyStringGraph.bindings g in
-	let distances = init_distances nodes start in
-	let res = aux [] nodes nodes;;
+(*let _ = MyStringGraph.distance "n2" "n1" g;;*)
+let _ = dijkstra g "n1" "n4";;
