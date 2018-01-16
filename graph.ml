@@ -175,7 +175,13 @@ module StringPair = struct
 		|c -> c;;
 end
 
+module Int = struct
+	type t = int
+	let compare = compare
+end
+
 module Ph2Map = Map.Make(StringPair);;
+module Ph2Res = Map.Make(Int);;
 
 let (arcs, paths) = Analyse.analyse_file_2 "2.txt";;
 
@@ -183,14 +189,51 @@ let rec initph2map_arcs arcs = match arcs with
 	|[] -> Ph2Map.empty
 	|(x,y,z)::b -> Ph2Map.add (x,y) (z,0) (Ph2Map.add (y,x) (z,0) (initph2map_arcs b));;
 
-let arcsmap = initph2map_arcs arcs;;
+let rec initph2map_res path i = match path with
+	|[] -> Ph2Res.empty
+	|a::b -> Ph2Res.add i (a,[],false,("","")) (initph2map_res b (i+1));;
 
-let ph2_move user path map = match path with
-	|[] -> map
-	|a::b::t -> 	let (x,y) = Ph2Map.find (a,b) map in
-								if (y=0) then (Ph2Map.add (a,b) (x,user) map)
-								else map;;
 
-let rec phase2_moves i paths map = match paths with
-	|[]
-	|a::b -> ph2_move i a map
+(* algo
+1. 	l = nombre de paths (=nbr d'users)
+2. 	tant que tous les paths ne sont pas vides:
+			temps ++
+			pour tous les users:
+				cas  user en transition: si temps dans le tunnel - 1 = 0 -> user plus en transition / sinon temps -1
+				cas user pas en transition : on le fait avancer si l'arrête est libre, sinon il attend
+*)
+let rec ph2_move user path  map mapres time =	(*update pour un user à un temps donné*)
+	let (p,l,t,x) = Ph2Res.find user mapres in	(*renvoie (map,mapres)*)
+	if t then let (u,v) = Ph2Map.find x map in
+		if ((v-1)=0) then ph2_move user path (Ph2Map.add x (u,0) map) (Ph2Res.add user (p,l,false,("","")) mapres) time
+		else ((Ph2Map.add x (u,(v-1)) map),mapres)
+	else
+		match path with
+		|[] -> (map,mapres)
+		|[a] -> (map, (Ph2Res.add user ([],l,false,("","")) mapres))
+		|(a::b::q) ->
+		let (u,v) = Ph2Map.find (a,b) map in
+		if (v!=0) then (map,mapres)
+		else ((Ph2Map.add (a,b) (u,u) map), (Ph2Res.add user ((b::q),((a,b,time)::l),true,(a,b)) mapres));;
+
+
+let check_end resmap =
+	let t = Ph2Res.exists (fun key (l,_,_,_) -> if (l!=[]) then true else false) resmap in
+	not t;;
+
+let rec ph2_aux arcsmap resmap i time =
+	if (check_end resmap) then (arcsmap,resmap)
+	else
+	let n = Ph2Res.cardinal resmap in
+	if (i=n) then ph2_aux arcsmap resmap 0 (time+1)
+	else let (u,_,_,_) = (Ph2Res.find i resmap) in
+				let (x,y) =  ph2_move i u arcsmap resmap time in
+				ph2_aux x y (i+1) time;;
+
+let ph2 arcs paths =
+	let arcsmap = initph2map_arcs arcs in
+	let resmap = initph2map_res paths 0 in
+	let (x,y) = ph2_aux arcsmap resmap 0 0 in
+	Ph2Res.bindings y;;
+
+let _ = ph2 arcs paths;;
