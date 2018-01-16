@@ -153,14 +153,17 @@ let rec dijkstra_aux dijkstramap node_curr nodes g e =
 
 let rec path dijkstramap s e =
 	if (e=s) then []
-	else let (_,_,d) = 	DijkstraMap.find e dijkstramap
+	else let (t,_,d) = 	DijkstraMap.find e dijkstramap
 	 										in d::(path dijkstramap s d);;
 
 let dijkstra g start e =
 	let nodes = MyStringGraph.bindings g in (* nodes est de la forme [("ni",[("nj",3),("nk", 6),...]),...]  *)
 	let dijkstramap = init_dijkstramap DijkstraMap.empty nodes start in (* distances est de la forme [(x,w,z),...] avec x noeud, w poids et z indicateur de visite *)
 	let dijkstramap = dijkstra_aux dijkstramap (start,0,false,"") nodes g start in
-	path dijkstramap start e;;
+	let res = path dijkstramap start e in
+	let (t,_,_) = DijkstraMap.find e dijkstramap in
+	(t,List.rev (e::res));;
 
 (*let _ = MyStringGraph.distance "n2" "n1" g;;*)
-let _ = dijkstra g "n1" "n4";;
+let (t,l) = dijkstra g "n1" "n8" in
+output_sol_1 t l;;
