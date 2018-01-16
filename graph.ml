@@ -164,6 +164,33 @@ let dijkstra g start e =
 	let (t,_,_) = DijkstraMap.find e dijkstramap in
 	(t,List.rev (e::res));;
 
-(*let _ = MyStringGraph.distance "n2" "n1" g;;*)
 let (t,l) = dijkstra g "n1" "n8" in
 output_sol_1 t l;;
+
+(* PHASE 2 *)
+module StringPair = struct
+	type t = string*string
+	let compare (x1,y1) (x2,y2) = match (String.compare x1 x2) with
+		|0 -> String.compare y1 y2
+		|c -> c;;
+end
+
+module Ph2Map = Map.Make(StringPair);;
+
+let (arcs, paths) = Analyse.analyse_file_2 "2.txt";;
+
+let rec initph2map_arcs arcs = match arcs with
+	|[] -> Ph2Map.empty
+	|(x,y,z)::b -> Ph2Map.add (x,y) (z,0) (Ph2Map.add (y,x) (z,0) (initph2map_arcs b));;
+
+let arcsmap = initph2map_arcs arcs;;
+
+let ph2_move user path map = match path with
+	|[] -> map
+	|a::b::t -> 	let (x,y) = Ph2Map.find (a,b) map in
+								if (y=0) then (Ph2Map.add (a,b) (x,user) map)
+								else map;;
+
+let rec phase2_moves i paths map = match paths with
+	|[]
+	|a::b -> ph2_move i a map
