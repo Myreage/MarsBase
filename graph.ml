@@ -120,14 +120,14 @@ let rec init_dijkstramap map nodes start = match nodes with
 let find_min dijkstramap = (* renvoie (min_key,distance) *)
 	DijkstraMap.fold (fun k v acc ->	let (w,_,_) = v in
 											let (x,w') = acc in
-											if w<w' then (k,w) else acc)
-	dijkstramap ("",999999);;
+											if (w<w' || w'=(-1)) then (k,w) else acc)
+	dijkstramap ("",-1);;
 
 let find_min_unseen dijkstramap =
 	DijkstraMap.fold (fun k v acc ->	let (w,z,t) = v in
 											let (x,w',_,_) = acc in
-											if ((w<w') && (not z) && (w!=(-1))) then (k,w,z,t) else acc)
-	dijkstramap ("",9999999,false,"");;
+											if ((w<w' || w'=(-1)) && (not z) && (w!=(-1))) then (k,w,z,t) else acc)
+	dijkstramap ("",-1,false,"");;
 
 
 let rec update dijkstramap voisins node_curr g = (* voisins = [(a,[..]),..] *)
