@@ -7,7 +7,7 @@ module type OrderedType = sig
 
 
   (* Signature des graphes *)
-  module type MyGraph = sig
+module type MyGraph = sig
     type node
     module NodeSet : Set.S with type elt = node*int
     module NodeMap : Map.S with type key = node
@@ -29,7 +29,7 @@ module type OrderedType = sig
 		val bindings : graph -> (NodeMap.key * NodeSet.t) list
 		val voisins : node -> (NodeMap.key * NodeSet.t) list -> (NodeMap.key * NodeSet.t) list
 		val is_node_in_set : node -> NodeSet.t -> bool
-  end
+end
 
 (* Foncteur pour faire des graphes *)
 module Make (X : OrderedType) : (MyGraph with type node = X.t) = struct
@@ -164,7 +164,7 @@ let dijkstra g start e =
 	(t,List.rev (e::res));;
 
 
-(* PHASE 2 *)
+(*-----------phase2---------------*)
 module StringPair = struct
 	type t = string*string
 	let compare (x1,y1) (x2,y2) = match (String.compare x1 x2) with
@@ -204,14 +204,6 @@ let rec initph2map_res paths i arcsmap = match paths with
 	|paths -> let pl = maxLength paths arcsmap in
 							Ph2Res.add i (pl,pathLength pl arcsmap,[],false,("","")) (initph2map_res (removePath pl paths) (i+1) arcsmap);;
 
-(* algo
-1. 	l = nombre de paths (=nbr d'users)
-2. 	tant que tous les paths ne sont pas vides:
-			temps ++ocaml change key
-			pour tous les users:
-				cas  user en transition: si temps dans le tunnel - 1 = 0 -> user plus en transition / sinon temps -1
-				cas user pas en transition : on le fait avancer si l'arrête est libre, sinon il attend
-*)
 let rec ph2_move user path  map mapres time =	(*update pour un user à un temps donné*)
 	let (p,h,l,t,x) = Ph2Res.find user mapres in	(*renvoie (map,mapres)*)
 	if t then let (u,v) = Ph2Map.find x map in
@@ -246,7 +238,7 @@ let ph2 arcs paths =
 	let (x,y) = ph2_aux arcsmap resmap 0 0 in
 	Ph2Res.bindings y;;
 
-(*phase3*)
+(*-----------phase3---------------*)
 
 let (arcs,dests) = Analyse.analyse_file_3 "3.txt";;
 let g = createGraph arcs MyStringGraph.empty;;
