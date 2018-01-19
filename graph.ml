@@ -110,7 +110,6 @@ let rec createGraph l g = match l with
 						let g2 =  MyStringGraph.add_edge x y z g in
 						createGraph b g2;;
 
-let g = createGraph liste MyStringGraph.empty;;
 
 let rec init_dijkstramap map nodes start = match nodes with
 		|[] -> map
@@ -164,8 +163,6 @@ let dijkstra g start e =
 	let (t,_,_) = DijkstraMap.find e dijkstramap in
 	(t,List.rev (e::res));;
 
-let (t,l) = dijkstra g "n1" "n8" in
-output_sol_1 t l;;
 
 (* PHASE 2 *)
 module StringPair = struct
@@ -189,36 +186,49 @@ let rec initph2map_arcs arcs = match arcs with
 	|[] -> Ph2Map.empty
 	|(x,y,z)::b -> Ph2Map.add (x,y) (z,0) (Ph2Map.add (y,x) (z,0) (initph2map_arcs b));;
 
-let rec initph2map_res path i = match path with
-	|[] -> Ph2Res.empty
-	|a::b -> Ph2Res.add i (a,[],false,("","")) (initph2map_res b (i+1));;
+let rec pathLength path arcsmap = match path with
+	|[a] -> 0
+	|a::b::q -> let (x,_) = (Ph2Map.find (a,b) arcsmap) in (x + (pathLength (b::q) arcsmap));;
 
+let rec maxLength paths arcsmap = match paths with
+	|[a] -> a
+	|a::b -> let n = maxLength b arcsmap in
+					if(pathLength a arcsmap)>(pathLength n arcsmap)
+					then a else n;;
+let rec removePath path paths = match paths with
+	|[]-> []
+	|a::b -> if (a=path) then b else (a::(removePath path b));;
+
+let rec initph2map_res paths i arcsmap = match paths with
+	|[] -> Ph2Res.empty
+	|paths -> let pl = maxLength paths arcsmap in
+							Ph2Res.add i (pl,pathLength pl arcsmap,[],false,("","")) (initph2map_res (removePath pl paths) (i+1) arcsmap);;
 
 (* algo
 1. 	l = nombre de paths (=nbr d'users)
 2. 	tant que tous les paths ne sont pas vides:
-			temps ++
+			temps ++ocaml change key
 			pour tous les users:
 				cas  user en transition: si temps dans le tunnel - 1 = 0 -> user plus en transition / sinon temps -1
 				cas user pas en transition : on le fait avancer si l'arrête est libre, sinon il attend
 *)
 let rec ph2_move user path  map mapres time =	(*update pour un user à un temps donné*)
-	let (p,l,t,x) = Ph2Res.find user mapres in	(*renvoie (map,mapres)*)
+	let (p,h,l,t,x) = Ph2Res.find user mapres in	(*renvoie (map,mapres)*)
 	if t then let (u,v) = Ph2Map.find x map in
-		if ((v-1)=0) then ph2_move user path (Ph2Map.add x (u,0) map) (Ph2Res.add user (p,l,false,("","")) mapres) time
+		if ((v-1)=0) then ph2_move user path (Ph2Map.add x (u,0) map) (Ph2Res.add user (p,h,l,false,("","")) mapres) time
 		else ((Ph2Map.add x (u,(v-1)) map),mapres)
 	else
 		match path with
 		|[] -> (map,mapres)
-		|[a] -> (map, (Ph2Res.add user ([],l,false,("","")) mapres))
+		|[a] -> (map, (Ph2Res.add user ([],h,l,false,("","")) mapres))
 		|(a::b::q) ->
 		let (u,v) = Ph2Map.find (a,b) map in
 		if (v!=0) then (map,mapres)
-		else ((Ph2Map.add (a,b) (u,u) map), (Ph2Res.add user ((b::q),((a,b,time)::l),true,(a,b)) mapres));;
+		else ((Ph2Map.add (a,b) (u,u) map), (Ph2Res.add user ((b::q),h,((a,b,time)::l),true,(a,b)) mapres));;
 
 
 let check_end resmap =
-	let t = Ph2Res.exists (fun key (l,_,_,_) -> if (l!=[]) then true else false) resmap in
+	let t = Ph2Res.exists (fun key (l,_,_,_,_) -> if (l!=[]) then true else false) resmap in
 	not t;;
 
 let rec ph2_aux arcsmap resmap i time =
@@ -226,14 +236,24 @@ let rec ph2_aux arcsmap resmap i time =
 	else
 	let n = Ph2Res.cardinal resmap in
 	if (i=n) then ph2_aux arcsmap resmap 0 (time+1)
-	else let (u,_,_,_) = (Ph2Res.find i resmap) in
+	else let (u,_,_,_,_) = (Ph2Res.find i resmap) in
 				let (x,y) =  ph2_move i u arcsmap resmap time in
 				ph2_aux x y (i+1) time;;
 
 let ph2 arcs paths =
 	let arcsmap = initph2map_arcs arcs in
-	let resmap = initph2map_res paths 0 in
+	let resmap = initph2map_res paths 0 arcsmap in
 	let (x,y) = ph2_aux arcsmap resmap 0 0 in
 	Ph2Res.bindings y;;
 
-let _ = ph2 arcs paths;;
+(*phase3*)
+
+let (arcs,dests) = Analyse.analyse_file_3 "3.txt";;
+let g = createGraph arcs MyStringGraph.empty;;
+
+let rec init_path_list_dijkstra g dests = match dests with
+	|[] -> []
+	|(x,y)::b -> let (_,t) = dijkstra g x y in t::(init_path_list_dijkstra g b);;
+
+let p = init_path_list_dijkstra g dests in
+ph2 arcs p;;
